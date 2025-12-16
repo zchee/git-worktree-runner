@@ -60,3 +60,7 @@ bench.txt
 
 # coverage
 coverage.out
+
+# binaries
+bin/
+internal/tools/bin/

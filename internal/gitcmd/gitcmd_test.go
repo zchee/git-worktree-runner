@@ -1,0 +1,89 @@
+// Copyright 2025 The git-worktree-runner Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+package gitcmd
+
+import (
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/google/go-cmp/cmp"
+)
+
+func TestNew(t *testing.T) {
+	t.Parallel()
+
+	g, err := New()
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+	if g.Path == "" {
+		t.Fatalf("New() returned empty git path")
+	}
+}
+
+func TestGitRun(t *testing.T) {
+	t.Parallel()
+
+	g, err := New()
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+
+	tests := map[string]struct {
+		args          []string
+		wantExitCode  int
+		wantStdoutSub string
+		wantErr       bool
+		wantExitErr   bool
+	}{
+		"success: git version": {
+			args:          []string{"--version"},
+			wantExitCode:  0,
+			wantStdoutSub: "git version",
+		},
+		"error: unknown git subcommand": {
+			args:         []string{"definitely-not-a-git-subcommand"},
+			wantExitCode: 1,
+			wantErr:      true,
+			wantExitErr:  true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := g.Run(t.Context(), "", tc.args...)
+			if tc.wantErr != (err != nil) {
+				t.Fatalf("error presence mismatch: wantErr=%v gotErr=%v err=%v", tc.wantErr, err != nil, err)
+			}
+			if diff := cmp.Diff(tc.wantExitCode, got.ExitCode); diff != "" {
+				t.Fatalf("exit code mismatch (-want +got):\n%s", diff)
+			}
+			if tc.wantStdoutSub != "" && !strings.Contains(got.Stdout, tc.wantStdoutSub) {
+				t.Fatalf("stdout mismatch: expected substring %q, got %q", tc.wantStdoutSub, got.Stdout)
+			}
+			if tc.wantExitErr {
+				var ee *ExitError
+				if !errors.As(err, &ee) {
+					t.Fatalf("expected *ExitError, got %T (%v)", err, err)
+				}
+			}
+		})
+	}
+}
